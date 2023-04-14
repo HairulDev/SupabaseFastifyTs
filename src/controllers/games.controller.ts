@@ -3,7 +3,7 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 import * as jwt from 'jsonwebtoken';
 import isEmpty from '../configs/string';
 
-async function getGames(request: FastifyRequest, reply: FastifyReply, fastify: FastifyInstance) {
+async function getGames(request: FastifyRequest, reply: FastifyReply, fastify: FastifyInstance): Promise<void> {
     try {
         const { data } = await fastify.supabase.from('games').select();
 
@@ -19,17 +19,8 @@ async function getGames(request: FastifyRequest, reply: FastifyReply, fastify: F
             return 0;
         });
 
-        for (const game of sort) {
-            if (game.comments && game.comments.length > 0) {
-                for (let i = 0; i < game.comments.length; i++) {
-                    const comment = game.comments[i];
-                    const user: any = await fastify.supabase.from('user_login').select('name').eq('id', comment.id).single();
-                    if (user) {
-                        const { data: { name } }: any = user;
-                        game.comments[i] = { ...comment, name };
-                    }
-                }
-            }
+        if (sort.comments && sort.comments.length > 0) {
+            sort.comments = await transformComments(sort.comments, fastify);
         }
         return reply.status(200).send({ data: sort });
     } catch (error) {
@@ -38,12 +29,9 @@ async function getGames(request: FastifyRequest, reply: FastifyReply, fastify: F
 }
 
 
-async function createGame(request: FastifyRequest, reply: FastifyReply, fastify: FastifyInstance) {
+async function createGame(request: FastifyRequest, reply: FastifyReply, fastify: FastifyInstance): Promise<void> {
     const body: any = request.body;
-    let token: any = request.headers["x-access-token"] || request.headers["authorization"];
-    token = token.slice(7);
-    const decodedToken: any = jwt.decode(token);
-    const idToken = decodedToken.id
+    const idToken = await getUserIdFromToken(request);
 
     const { title } = body;
     try {
@@ -57,12 +45,8 @@ async function createGame(request: FastifyRequest, reply: FastifyReply, fastify:
     }
 }
 
-async function updateGame(request: FastifyRequest, reply: FastifyReply, fastify: FastifyInstance) {
-    let token: any = request.headers["x-access-token"] || request.headers["authorization"];
-    token = token.slice(7);
-    const decodedToken: any = jwt.decode(token);
-    const idToken = decodedToken.id;
-
+async function updateGame(request: FastifyRequest, reply: FastifyReply, fastify: FastifyInstance): Promise<void> {
+    const idToken = await getUserIdFromToken(request);
     const { id }: any = request.params;
     const body = request.body;
 
@@ -88,12 +72,10 @@ async function updateGame(request: FastifyRequest, reply: FastifyReply, fastify:
 }
 
 
-async function deleteGame(request: FastifyRequest, reply: FastifyReply, fastify: FastifyInstance) {
+async function deleteGame(request: FastifyRequest, reply: FastifyReply, fastify: FastifyInstance): Promise<void> {
     const { id }: any = request.params;
-    let token: any = request.headers["x-access-token"] || request.headers["authorization"];
-    token = token.slice(7);
-    const decodedToken: any = jwt.decode(token);
-    const idToken = decodedToken.id;
+
+    const idToken = await getUserIdFromToken(request);
 
     try {
         const { data }: any = await fastify.supabase.from('games').select().eq('id', id);
@@ -115,19 +97,14 @@ async function deleteGame(request: FastifyRequest, reply: FastifyReply, fastify:
 }
 
 
-async function getGame(request: FastifyRequest, reply: FastifyReply, fastify: FastifyInstance) {
+async function getGame(request: FastifyRequest, reply: FastifyReply, fastify: FastifyInstance): Promise<void> {
     const { id }: any = request.params;
     try {
         const { data } = await fastify.supabase.from('games').select().eq('id', id);
         const [game]: any = data;
 
-        for (let i = 0; i < game.comments.length; i++) {
-            const comment = game.comments[i];
-            const user: any = await fastify.supabase.from('user_login').select('name').eq('id', comment.id).single();
-            if (user) {
-                const { data: { name } }: any = user;
-                game.comments[i] = { ...comment, name };
-            }
+        if (game.comments && game.comments.length > 0) {
+            game.comments = await transformComments(game.comments, fastify);
         }
 
         return reply.status(200).send(game);
@@ -137,12 +114,10 @@ async function getGame(request: FastifyRequest, reply: FastifyReply, fastify: Fa
 }
 
 
-async function likeGame(request: FastifyRequest, reply: FastifyReply, fastify: FastifyInstance) {
+async function likeGame(request: FastifyRequest, reply: FastifyReply, fastify: FastifyInstance): Promise<void> {
     const { id }: any = request.params;
-    let token: any = request.headers["x-access-token"] || request.headers["authorization"];
-    token = token.slice(7);
-    const decodedToken: any = jwt.decode(token);
-    const idToken = decodedToken.id
+
+    const idToken = await getUserIdFromToken(request);
 
     try {
         const { data } = await fastify.supabase.from('games').select().eq('id', id);
@@ -173,11 +148,9 @@ async function likeGame(request: FastifyRequest, reply: FastifyReply, fastify: F
 }
 
 
-async function commentGame(request: FastifyRequest, reply: FastifyReply, fastify: FastifyInstance) {
-    let token: any = request.headers["x-access-token"] || request.headers["authorization"];
-    token = token.slice(7);
-    const decodedToken: any = jwt.decode(token);
-    const idToken = decodedToken.id
+async function commentGame(request: FastifyRequest, reply: FastifyReply, fastify: FastifyInstance): Promise<void> {
+
+    const idToken = await getUserIdFromToken(request);
 
     const { id }: any = request.params;
     const body: any = request.body;
@@ -208,18 +181,24 @@ async function commentGame(request: FastifyRequest, reply: FastifyReply, fastify
 }
 
 
-async function getToken(request: FastifyRequest, reply: FastifyReply, fastify: FastifyInstance) {
-    try {
-        let token: any = request.headers["x-access-token"] || request.headers["authorization"];
-        token = token.slice(7);
-        const decodedToken = jwt.decode(token);
-        console.log("getToken====", decodedToken);
-        return token;
-    } catch (error) {
-        return reply.status(500).send({ message: error });
-    }
+async function getUserIdFromToken(request: FastifyRequest): Promise<string> {
+    let token: any = request.headers["x-access-token"] || request.headers["authorization"];
+    token = token.slice(7);
+    const decodedToken: any = jwt.decode(token);
+    return decodedToken.id;
 }
-
+async function transformComments(comments: any[], fastify: FastifyInstance): Promise<any[]> {
+    const transformedComments = [];
+    for (let i = 0; i < comments.length; i++) {
+        const comment = comments[i];
+        const user = await fastify.supabase.from('user_login').select('name').eq('id', comment.id).single();
+        if (user) {
+            const { data: { name } }: any = user;
+            transformedComments.push({ ...comment, name });
+        }
+    }
+    return transformedComments;
+}
 
 export default {
     getGames,
@@ -229,5 +208,4 @@ export default {
     getGame,
     likeGame,
     commentGame,
-    getToken,
 }
