@@ -1,7 +1,9 @@
 import fp from 'fastify-plugin'
 
 import * as jwt from 'jsonwebtoken';
-const jwtSecret = 'secret';
+import env from '../configs/vars'
+
+const jwtSecret: any = env.jwtSecret;
 const oneDay = 86400;
 
 export interface SupportPluginOptions {

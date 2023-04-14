@@ -6,7 +6,7 @@ export default fp(async (fastify, opts) => {
     // Add an onRequest hook to verify the user's authentication status
     fastify.addHook('onRequest', async (request, reply) => {
         // Menyebutkan path/route yang ingin diabaikan dari hook
-        const publicRoutes = ['/user/login', '/user/register'];
+        const publicRoutes = ['/user/login', '/user/register', '/game'];
 
         let token = request.headers["x-access-token"] || request.headers["authorization"];
         let currentUrl = request.url;

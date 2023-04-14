@@ -43,12 +43,10 @@ async function loginHandler(request: FastifyRequest, reply: FastifyReply, fastif
         if (!isPasswordCorrect) {
             return reply.status(401).send({ message: 'Incorrect password' });
         }
+        const dataUser = { id: firstElement.id, email: firstElement.email, name: firstElement.name };
+        const token = await fastify.jwtSign(dataUser);
 
-        const token = await fastify.jwtSign(
-            { email: firstElement.email, name: firstElement.name }
-        );
-
-        return reply.status(200).send({ message: 'Login successfully', token });
+        return reply.status(200).send({ token, user: dataUser });
     } catch (error) {
         return reply.status(500).send({ message: error });
     }

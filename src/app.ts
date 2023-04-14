@@ -1,6 +1,7 @@
 import { join } from 'path';
 import AutoLoad, { AutoloadPluginOptions } from '@fastify/autoload';
 import { FastifyPluginAsync } from 'fastify';
+import cors from '@fastify/cors'
 
 export type AppOptions = {
   // Place your custom options for app below here.
@@ -16,9 +17,9 @@ const app: FastifyPluginAsync<AppOptions> = async (
   opts
 ): Promise<void> => {
   // Place here your custom code!
-
-
-
+  await fastify.register(cors, {
+    origin: '*',
+  })
 
 
   // Do not touch the following lines
